@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peta Dunia Interaktif & Daftar Negara</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body, html {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+        }
+
+        #app-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* PANEL KIRI (Daftar Negara) */
+        #sidebar {
+            width: 320px;
+            background: #ffffff;
+            box-shadow: 2px 0 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            height: 100%;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #2563eb;
+            color: white;
+        }
+
+        .sidebar-header h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #country-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+        }
+
+        .country-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            border-bottom: 1px solid #f3f4f6;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .country-item:hover {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .country-item img {
+            width: 24px;
+            height: auto;
+            border-radius: 3px;
+            margin-right: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+
+        /* PETA (PANEL KANAN) */
+        #map {
+            flex: 1;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* GAYA BENDERA DI PETA */
+        .custom-marker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .marker-flag {
+            width: 20px; 
+            height: auto;
+            border-radius: 2px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            border: 1px solid white;
+            transition: all 0.2s ease-out;
+        }
+
+        .marker-label {
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 2px 5px;
+            border-radius: 3px;
+            margin-top: 2px;
+            white-space: nowrap;
+            pointer-events: none;
+            display: none; /* Muncul saat dizoom */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <h2>🌍 Jelajah Dunia</h2>
+                <input type="text" id="searchInput" class="search-box" placeholder="Cari nama negara...">
+            </div>
+            <ul id="country-list"></ul>
+        </div>
+
+        <!-- Kontainer Peta -->
+        <div id="map"></div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script>
+        // Database Koordinat & Bendera Negara
+        const countriesData = [
+            {code:"AF", lat:33.93911, lon:67.709953, name:"Afghanistan", emoji:"🇦🇫", url:"https://flagcdn.com/w320/af.png"},
+            {code:"AL", lat:41.153332, lon:20.168331, name:"Albania", emoji:"🇦🇱", url:"https://flagcdn.com/w320/al.png"},
+            {code:"DZ", lat:28.033886, lon:1.659626, name:"Algeria", emoji:"🇩🇿", url:"https://flagcdn.com/w320/dz.png"},
+            {code:"AD", lat:42.546245, lon:1.601554, name:"Andorra", emoji:"🇦🇩", url:"https://flagcdn.com/w320/ad.png"},
+            {code:"AO", lat:-11.202692, lon:17.873887, name:"Angola", emoji:"🇦🇴", url:"https://flagcdn.com/w320/ao.png"},
+            {code:"AG", lat:17.060816, lon:-61.796428, name:"Antigua and Barbuda", emoji:"🇦🇬", url:"https://flagcdn.com/w320/ag.png"},
+            {code:"AR", lat:-38.416097, lon:-63.616672, name:"Argentina", emoji:"🇦🇷", url:"https://flagcdn.com/w320/ar.png"},
+            {code:"AM", lat:40.069099, lon:45.038189, name:"Armenia", emoji:"🇦🇲", url:"https://flagcdn.com/w320/am.png"},
+            {code:"AU", lat:-25.274398, lon:133.775136, name:"Australia", emoji:"🇦🇺", url:"https://flagcdn.com/w320/au.png"},
+            {code:"AT", lat:47.516231, lon:14.550072, name:"Austria", emoji:"🇦🇹", url:"https://flagcdn.com/w320/at.png"},
+            {code:"AZ", lat:40.143105, lon:47.576927, name:"Azerbaijan", emoji:"🇦🇿", url:"https://flagcdn.com/w320/az.png"},
+            {code:"BS", lat:25.03428, lon:-77.39628, name:"Bahamas", emoji:"🇧🇸", url:"https://flagcdn.com/w320/bs.png"},
+            {code:"BH", lat:25.930414, lon:50.637772, name:"Bahrain", emoji:"🇧🇭", url:"https://flagcdn.com/w320/bh.png"},
+            {code:"BD", lat:23.684994, lon:90.356331, name:"Bangladesh", emoji:"🇧🇩", url:"https://flagcdn.com/w320/bd.png"},
+            {code:"BB", lat:13.193887, lon:-59.543198, name:"Barbados", emoji:"🇧🇧", url:"https://flagcdn.com/w320/bb.png"},
+            {code:"BY", lat:53.709807, lon:27.953389, name:"Belarus", emoji:"🇧🇾", url:"https://flagcdn.com/w320/by.png"},
+            {code:"BE", lat:50.503887, lon:4.469936, name:"Belgium", emoji:"🇧🇪", url:"https://flagcdn.com/w320/be.png"},
+            {code:"BZ", lat:17.189877, lon:-88.49765, name:"Belize", emoji:"🇧🇿", url:"https://flagcdn.com/w320/bz.png"},
+            {code:"BJ", lat:9.30769, lon:2.315834, name:"Benin", emoji:"🇧🇯", url:"https://flagcdn.com/w320/bj.png"},
+            {code:"BT", lat:27.514162, lon:90.433601, name:"Bhutan", emoji:"🇧🇹", url:"https://flagcdn.com/w320/bt.png"},
+            {code:"BO", lat:-16.290154, lon:-63.588653, name:"Bolivia", emoji:"🇧🇴", url:"https://flagcdn.com/w320/bo.png"},
+            {code:"BA", lat:43.915886, lon:17.679076, name:"Bosnia and Herzegovina", emoji:"🇧🇦", url:"https://flagcdn.com/w320/ba.png"},
+            {code:"BW", lat:-22.328474, lon:24.684866, name:"Botswana", emoji:"🇧🇼", url:"https://flagcdn.com/w320/bw.png"},
+            {code:"BR", lat:-14.235004, lon:-51.92528, name:"Brazil", emoji:"🇧🇷", url:"https://flagcdn.com/w320/br.png"},
+            {code:"BN", lat:4.535277, lon:114.727669, name:"Brunei", emoji:"🇧🇳", url:"https://flagcdn.com/w320/bn.png"},
+            {code:"BG", lat:42.733883, lon:25.48583, name:"Bulgaria", emoji:"🇧🇬", url:"https://flagcdn.com/w320/bg.png"},
+            {code:"BF", lat:12.238333, lon:-1.561593, name:"Burkina Faso", emoji:"🇧🇫", url:"https://flagcdn.com/w320/bf.png"},
+            {code:"BI", lat:-3.373056, lon:29.918886, name:"Burundi", emoji:"🇧🇮", url:"https://flagcdn.com/w320/bi.png"},
+            {code:"CV", lat:16.002082, lon:-24.013197, name:"Cabo Verde", emoji:"🇨🇻", url:"https://flagcdn.com/w320/cv.png"},
+            {code:"KH", lat:12.565679, lon:104.990963, name:"Cambodia", emoji:"🇰🇭", url:"https://flagcdn.com/w320/kh.png"},
+            {code:"CM", lat:7.369722, lon:12.354722, name:"Cameroon", emoji:"🇨🇲", url:"https://flagcdn.com/w320/cm.png"},
+            {code:"CA", lat:56.130366, lon:-106.346771, name:"Canada", emoji:"🇨🇦", url:"https://flagcdn.com/w320/ca.png"},
+            {code:"CF", lat:6.611111, lon:20.939444, name:"Central African Republic", emoji:"🇨🇫", url:"https://flagcdn.com/w320/cf.png"},
+            {code:"TD", lat:15.454166, lon:18.732207, name:"Chad", emoji:"🇹🇩", url:"https://flagcdn.com/w320/td.png"},
+            {code:"CL", lat:-35.675147, lon:-71.542969, name:"Chile", emoji:"🇨🇱", url:"https://flagcdn.com/w320/cl.png"},
+            {code:"CN", lat:35.86166, lon:104.195397, name:"China", emoji:"🇨🇳", url:"https://flagcdn.com/w320/cn.png"},
+            {code:"CO", lat:4.570868, lon:-74.297333, name:"Colombia", emoji:"🇨🇴", url:"https://flagcdn.com/w320/co.png"},
+            {code:"KM", lat:-11.875001, lon:43.872219, name:"Comoros", emoji:"🇰🇲", url:"https://flagcdn.com/w320/km.png"},
+            {code:"CR", lat:9.748917, lon:-83.753428, name:"Costa Rica", emoji:"🇨🇷", url:"https://flagcdn.com/w320/cr.png"},
+            {code:"HR", lat:45.1, lon:15.2, name:"Croatia", emoji:"🇭🇷", url:"https://flagcdn.com/w320/hr.png"},
+            {code:"CU", lat:21.521757, lon:-77.781167, name:"Cuba", emoji:"🇨🇺", url:"https://flagcdn.com/w320/cu.png"},
+            {code:"CY", lat:35.126413, lon:33.429859, name:"Cyprus", emoji:"🇨🇾", url:"https://flagcdn.com/w320/cy.png"},
+            {code:"CZ", lat:49.817492, lon:15.472962, name:"Czechia", emoji:"🇨🇿", url:"https://flagcdn.com/w320/cz.png"},
+            {code:"CI", lat:7.539989, lon:-5.54708, name:"Côte d’Ivoire", emoji:"🇨🇮", url:"https://flagcdn.com/w320/ci.png"},
+            {code:"CD", lat:-4.038333, lon:21.758664, name:"Democratic Republic of the Congo", emoji:"🇨🇩", url:"https://flagcdn.com/w320/cd.png"},
+            {code:"DK", lat:56.26392, lon:9.501785, name:"Denmark", emoji:"🇩🇰", url:"https://flagcdn.com/w320/dk.png"},
+            {code:"DJ", lat:11.825138, lon:42.590275, name:"Djibouti", emoji:"🇩🇯", url:"https://flagcdn.com/w320/dj.png"},
+            {code:"DM", lat:15.414999, lon:-61.370976, name:"Dominica", emoji:"🇩🇲", url:"https://flagcdn.com/w320/dm.png"},
+            {code:"DO", lat:18.735693, lon:-70.162651, name:"Dominican Republic", emoji:"🇩🇴", url:"https://flagcdn.com/w320/do.png"},
+            {code:"EC", lat:-1.831239, lon:-78.183406, name:"Ecuador", emoji:"🇪🇨", url:"https://flagcdn.com/w320/ec.png"},
+            {code:"EG", lat:26.820553, lon:30.802498, name:"Egypt", emoji:"🇪🇬", url:"https://flagcdn.com/w320/eg.png"},
+            {code:"SV", lat:13.794185, lon:-88.89653, name:"El Salvador", emoji:"🇸🇻", url:"https://flagcdn.com/w320/sv.png"},
+            {code:"GQ", lat:1.650801, lon:10.267895, name:"Equatorial Guinea", emoji:"🇬🇶", url:"https://flagcdn.com/w320/gq.png"},
+            {code:"ER", lat:15.179384, lon:39.782334, name:"Eritrea", emoji:"🇪🇷", url:"https://flagcdn.com/w320/er.png"},
+            {code:"EE", lat:58.595272, lon:25.013607, name:"Estonia", emoji:"🇪🇪", url:"https://flagcdn.com/w320/ee.png"},
+            {code:"SZ", lat:-26.522503, lon:31.465866, name:"Eswatini", emoji:"🇸🇿", url:"https://flagcdn.com/w320/sz.png"},
+            {code:"ET", lat:9.145, lon:40.489673, name:"Ethiopia", emoji:"🇪🇹", url:"https://flagcdn.com/w320/et.png"},
+            {code:"FM", lat:7.425554, lon:150.550812, name:"Federated States of Micronesia", emoji:"🇫🇲", url:"https://flagcdn.com/w320/fm.png"},
+            {code:"FJ", lat:-16.578193, lon:179.414413, name:"Fiji", emoji:"🇫🇯", url:"https://flagcdn.com/w320/fj.png"},
+            {code:"FI", lat:61.92411, lon:25.748151, name:"Finland", emoji:"🇫🇮", url:"https://flagcdn.com/w320/fi.png"},
+            {code:"FR", lat:46.227638, lon:2.213749, name:"France", emoji:"🇫🇷", url:"https://flagcdn.com/w320/fr.png"},
+            {code:"GA", lat:-0.803689, lon:11.609444, name:"Gabon", emoji:"🇬🇦", url:"https://flagcdn.com/w320/ga.png"},
+            {code:"GM", lat:13.443182, lon:-15.310139, name:"Gambia", emoji:"🇬🇲", url:"https://flagcdn.com/w320/gm.png"},
+            {code:"GE", lat:42.315407, lon:43.356892, name:"Georgia", emoji:"🇬🇪", url:"https://flagcdn.com/w320/ge.png"},
+            {code:"DE", lat:51.165691, lon:10.451526, name:"Germany", emoji:"🇩🇪", url:"https://flagcdn.com/w320/de.png"},
+            {code:"GH", lat:7.946527, lon:-1.023194, name:"Ghana", emoji:"🇬🇭", url:"https://flagcdn.com/w320/gh.png"},
+            {code:"GR", lat:39.074208, lon:21.824312, name:"Greece", emoji:"🇬🇷", url:"https://flagcdn.com/w320/gr.png"},
+            {code:"GD", lat:12.262776, lon:-61.604171, name:"Grenada", emoji:"🇬🇩", url:"https://flagcdn.com/w320/gd.png"},
+            {code:"GT", lat:15.783471, lon:-90.230759, name:"Guatemala", emoji:"🇬🇹", url:"https://flagcdn.com/w320/gt.png"},
+            {code:"GN", lat:9.945587, lon:-9.696645, name:"Guinea", emoji:"🇬🇳", url:"https://flagcdn.com/w320/gn.png"},
+            {code:"GW", lat:11.803749, lon:-15.180413, name:"Guinea-Bissau", emoji:"🇬🇼", url:"https://flagcdn.com/w320/gw.png"},
+            {code:"GY", lat:4.860416, lon:-58.93018, name:"Guyana", emoji:"🇬🇾", url:"https://flagcdn.com/w320/gy.png"},
+            {code:"HT", lat:18.971187, lon:-72.285215, name:"Haiti", emoji:"🇭🇹", url:"https://flagcdn.com/w320/ht.png"},
+            {code:"HN", lat:15.199999, lon:-86.241905, name:"Honduras", emoji:"🇭🇳", url:"https://flagcdn.com/w320/hn.png"},
+            {code:"HU", lat:47.162494, lon:19.503304, name:"Hungary", emoji:"🇭🇺", url:"https://flagcdn.com/w320/hu.png"},
+            {code:"IS", lat:64.963051, lon:-19.020835, name:"Iceland", emoji:"🇮🇸", url:"https://flagcdn.com/w320/is.png"},
+            {code:"IN", lat:20.593684, lon:78.96288, name:"India", emoji:"🇮🇳", url:"https://flagcdn.com/w320/in.png"},
+            {code:"ID", lat:-0.789275, lon:113.921327, name:"Indonesia", emoji:"🇮🇩", url:"https://flagcdn.com/w320/id.png"},
+            {code:"IR", lat:32.427908, lon:53.688046, name:"Iran", emoji:"🇮🇷", url:"https://flagcdn.com/w320/ir.png"},
+            {code:"IQ", lat:33.223191, lon:43.679291, name:"Iraq", emoji:"🇮🇶", url:"https://flagcdn.com/w320/iq.png"},
+            {code:"IE", lat:53.41291, lon:-8.24389, name:"Ireland", emoji:"🇮🇪", url:"https://flagcdn.com/w320/ie.png"},
+            {code:"IL", lat:31.046051, lon:34.851612, name:"Israel", emoji:"🇮🇱", url:"https://flagcdn.com/w320/il.png"},
+            {code:"IT", lat:41.87194, lon:12.56738, name:"Italy", emoji:"🇮🇹", url:"https://flagcdn.com/w320/it.png"},
+            {code:"JM", lat:18.109581, lon:-77.297508, name:"Jamaica", emoji:"🇯🇲", url:"https://flagcdn.com/w320/jm.png"},
+            {code:"JP", lat:36.204824, lon:138.252924, name:"Japan", emoji:"🇯🇵", url:"https://flagcdn.com/w320/jp.png"},
+            {code:"JO", lat:30.585164, lon:36.238414, name:"Jordan", emoji:"🇯🇴", url:"https://flagcdn.com/w320/jo.png"},
+            {code:"KZ", lat:48.019573, lon:66.923684, name:"Kazakhstan", emoji:"🇰🇿", url:"https://flagcdn.com/w320/kz.png"},
+            {code:"KE", lat:-0.023559, lon:37.906193, name:"Kenya", emoji:"🇰🇪", url:"https://flagcdn.com/w320/ke.png"},
+            {code:"KI", lat:-3.370417, lon:-168.734039, name:"Kiribati", emoji:"🇰🇮", url:"https://flagcdn.com/w320/ki.png"},
+            {code:"KW", lat:29.31166, lon:47.481766, name:"Kuwait", emoji:"🇰🇼", url:"https://flagcdn.com/w320/kw.png"},
+            {code:"KG", lat:41.20438, lon:74.766098, name:"Kyrgyzstan", emoji:"🇰🇬", url:"https://flagcdn.com/w320/kg.png"},
+            {code:"LA", lat:19.85627, lon:102.495496, name:"Laos", emoji:"🇱🇦", url:"https://flagcdn.com/w320/la.png"},
+            {code:"LV", lat:56.879635, lon:24.603189, name:"Latvia", emoji:"🇱🇻", url:"https://flagcdn.com/w320/lv.png"},
+            {code:"LB", lat:33.854721, lon:35.862285, name:"Lebanon", emoji:"🇱🇧", url:"https://flagcdn.com/w320/lb.png"},
+            {code:"LS", lat:-29.609988, lon:28.233608, name:"Lesotho", emoji:"🇱🇸", url:"https://flagcdn.com/w320/ls.png"},
+            {code:"LR", lat:6.428055, lon:-9.429499, name:"Liberia", emoji:"🇱🇷", url:"https://flagcdn.com/w320/lr.png"},
+            {code:"LY", lat:26.3351, lon:17.228331, name:"Libya", emoji:"🇱🇾", url:"https://flagcdn.com/w320/ly.png"},
+            {code:"LI", lat:47.166, lon:9.555373, name:"Liechtenstein", emoji:"🇱🇮", url:"https://flagcdn.com/w320/li.png"},
+            {code:"LT", lat:55.169438, lon:23.881275, name:"Lithuania", emoji:"🇱🇹", url:"https://flagcdn.com/w320/lt.png"},
+            {code:"LU", lat:49.815273, lon:6.129583, name:"Luxembourg", emoji:"🇱🇺", url:"https://flagcdn.com/w320/lu.png"},
+            {code:"MG", lat:-18.766947, lon:46.869107, name:"Madagascar", emoji:"🇲🇬", url:"https://flagcdn.com/w320/mg.png"},
+            {code:"MW", lat:-13.254308, lon:34.301525, name:"Malawi", emoji:"🇲🇼", url:"https://flagcdn.com/w320/mw.png"},
+            {code:"MY", lat:4.210484, lon:101.975766, name:"Malaysia", emoji:"🇲🇾", url:"https://flagcdn.com/w320/my.png"},
+            {code:"MV", lat:3.202778, lon:73.22068, name:"Maldives", emoji:"🇲🇻", url:"https://flagcdn.com/w320/mv.png"},
+            {code:"ML", lat:17.570692, lon:-3.996166, name:"Mali", emoji:"🇲🇱", url:"https://flagcdn.com/w320/ml.png"},
+            {code:"MT", lat:35.937496, lon:14.375416, name:"Malta", emoji:"🇲🇹", url:"https://flagcdn.com/w320/mt.png"},
+            {code:"MH", lat:7.131474, lon:171.184478, name:"Marshall Islands", emoji:"🇲🇭", url:"https://flagcdn.com/w320/mh.png"},
+            {code:"MR", lat:21.00789, lon:-10.940835, name:"Mauritania", emoji:"🇲🇷", url:"https://flagcdn.com/w320/mr.png"},
+            {code:"MU", lat:-20.348404, lon:57.552152, name:"Mauritius", emoji:"🇲🇺", url:"https://flagcdn.com/w320/mu.png"},
+            {code:"MX", lat:23.634501, lon:-102.552784, name:"Mexico", emoji:"🇲🇽", url:"https://flagcdn.com/w320/mx.png"},
+            {code:"MD", lat:47.411631, lon:28.369885, name:"Moldova", emoji:"🇲🇩", url:"https://flagcdn.com/w320/md.png"},
+            {code:"MC", lat:43.750298, lon:7.412841, name:"Monaco", emoji:"🇲🇨", url:"https://flagcdn.com/w320/mc.png"},
+            {code:"MN", lat:46.862496, lon:103.846656, name:"Mongolia", emoji:"🇲🇳", url:"https://flagcdn.com/w320/mn.png"},
+            {code:"ME", lat:42.708678, lon:19.37439, name:"Montenegro", emoji:"🇲🇪", url:"https://flagcdn.com/w320/me.png"},
+            {code:"MA", lat:31.791702, lon:-7.09262, name:"Morocco", emoji:"🇲🇦", url:"https://flagcdn.com/w320/ma.png"},
+            {code:"MZ", lat:-18.665695, lon:35.529562, name:"Mozambique", emoji:"🇲🇿", url:"https://flagcdn.com/w320/mz.png"},
+            {code:"MM", lat:21.913965, lon:95.956223, name:"Myanmar", emoji:"🇲🇲", url:"https://flagcdn.com/w320/mm.png"},
+            {code:"NA", lat:-22.95764, lon:18.49041, name:"Namibia", emoji:"🇳🇦", url:"https://flagcdn.com/w320/na.png"},
+            {code:"NR", lat:-0.522778, lon:166.931503, name:"Nauru", emoji:"🇳🇷", url:"https://flagcdn.com/w320/nr.png"},
+            {code:"NP", lat:28.394857, lon:84.124008, name:"Nepal", emoji:"🇳🇵", url:"https://flagcdn.com/w320/np.png"},
+            {code:"NL", lat:52.132633, lon:5.291266, name:"Netherlands", emoji:"🇳🇱", url:"https://flagcdn.com/w320/nl.png"},
+            {code:"NZ", lat:-40.900557, lon:174.885971, name:"New Zealand", emoji:"🇳🇿", url:"https://flagcdn.com/w320/nz.png"},
+            {code:"NI", lat:12.865416, lon:-85.207229, name:"Nicaragua", emoji:"🇳🇮", url:"https://flagcdn.com/w320/ni.png"},
+            {code:"NE", lat:17.607789, lon:8.081666, name:"Niger", emoji:"🇳🇪", url:"https://flagcdn.com/w320/ne.png"},
+            {code:"NG", lat:9.081999, lon:8.675277, name:"Nigeria", emoji:"🇳🇬", url:"https://flagcdn.com/w320/ng.png"},
+            {code:"KP", lat:40.339852, lon:127.510093, name:"North Korea", emoji:"🇰🇵", url:"https://flagcdn.com/w320/kp.png"},
+            {code:"MK", lat:41.608635, lon:21.745275, name:"North Macedonia", emoji:"🇲🇰", url:"https://flagcdn.com/w320/mk.png"},
+            {code:"NO", lat:60.472024, lon:8.468946, name:"Norway", emoji:"🇳🇴", url:"https://flagcdn.com/w320/no.png"},
+            {code:"OM", lat:21.512583, lon:55.923255, name:"Oman", emoji:"🇴🇲", url:"https://flagcdn.com/w320/om.png"},
+            {code:"PK", lat:30.375321, lon:69.345116, name:"Pakistan", emoji:"🇵🇰", url:"https://flagcdn.com/w320/pk.png"},
+            {code:"PW", lat:7.51498, lon:134.58252, name:"Palau", emoji:"🇵🇼", url:"https://flagcdn.com/w320/pw.png"},
+            {code:"PS", lat:31.952162, lon:35.233154, name:"Palestine", emoji:"🇵🇸", url:"https://flagcdn.com/w320/ps.png"},
+            {code:"PA", lat:8.537981, lon:-80.782127, name:"Panama", emoji:"🇵🇦", url:"https://flagcdn.com/w320/pa.png"},
+            {code:"PG", lat:-6.314993, lon:143.95555, name:"Papua New Guinea", emoji:"🇵🇬", url:"https://flagcdn.com/w320/pg.png"},
+            {code:"PY", lat:-23.442503, lon:-58.443832, name:"Paraguay", emoji:"🇵🇾", url:"https://flagcdn.com/w320/py.png"},
+            {code:"PE", lat:-9.189967, lon:-75.015152, name:"Peru", emoji:"🇵🇪", url:"https://flagcdn.com/w320/pe.png"},
+            {code:"PH", lat:12.879721, lon:121.774017, name:"Philippines", emoji:"🇵🇭", url:"https://flagcdn.com/w320/ph.png"},
+            {code:"PL", lat:51.919438, lon:19.145136, name:"Poland", emoji:"🇵🇱", url:"https://flagcdn.com/w320/pl.png"},
+            {code:"PT", lat:39.399872, lon:-8.224454, name:"Portugal", emoji:"🇵🇹", url:"https://flagcdn.com/w320/pt.png"},
+            {code:"QA", lat:25.354826, lon:51.183884, name:"Qatar", emoji:"🇶🇦", url:"https://flagcdn.com/w320/qa.png"},
+            {code:"CG", lat:-0.228021, lon:15.827659, name:"Republic of the Congo", emoji:"🇨🇬", url:"https://flagcdn.com/w320/cg.png"},
+            {code:"RO", lat:45.943161, lon:24.96676, name:"Romania", emoji:"🇷🇴", url:"https://flagcdn.com/w320/ro.png"},
+            {code:"RU", lat:61.52401, lon:105.318756, name:"Russia", emoji:"🇷🇺", url:"https://flagcdn.com/w320/ru.png"},
+            {code:"RW", lat:-1.940278, lon:29.873888, name:"Rwanda", emoji:"🇷🇼", url:"https://flagcdn.com/w320/rw.png"},
+            {code:"KN", lat:17.357822, lon:-62.782998, name:"Saint Kitts and Nevis", emoji:"🇰🇳", url:"https://flagcdn.com/w320/kn.png"},
+            {code:"LC", lat:13.909444, lon:-60.978893, name:"Saint Lucia", emoji:"🇱🇨", url:"https://flagcdn.com/w320/lc.png"},
+            {code:"VC", lat:12.984305, lon:-61.287228, name:"Saint Vincent and the Grenadines", emoji:"🇻🇨", url:"https://flagcdn.com/w320/vc.png"},
+            {code:"WS", lat:-13.759029, lon:-172.104629, name:"Samoa", emoji:"🇼🇸", url:"https://flagcdn.com/w320/ws.png"},
+            {code:"SM", lat:43.94236, lon:12.457777, name:"San Marino", emoji:"🇸🇲", url:"https://flagcdn.com/w320/sm.png"},
+            {code:"ST", lat:0.18636, lon:6.613081, name:"Sao Tome and Principe", emoji:"🇸🇹", url:"https://flagcdn.com/w320/st.png"},
+            {code:"SA", lat:23.885942, lon:45.079162, name:"Saudi Arabia", emoji:"🇸🇦", url:"https://flagcdn.com/w320/sa.png"},
+            {code:"SN", lat:14.497401, lon:-14.452362, name:"Senegal", emoji:"🇸🇳", url:"https://flagcdn.com/w320/sn.png"},
+            {code:"RS", lat:44.016521, lon:21.005859, name:"Serbia", emoji:"🇷🇸", url:"https://flagcdn.com/w320/rs.png"},
+            {code:"SC", lat:-4.679574, lon:55.491977, name:"Seychelles", emoji:"🇸🇨", url:"https://flagcdn.com/w320/sc.png"},
+            {code:"SL", lat:8.460555, lon:-11.779889, name:"Sierra Leone", emoji:"🇸🇱", url:"https://flagcdn.com/w320/sl.png"},
+            {code:"SG", lat:1.352083, lon:103.819836, name:"Singapore", emoji:"🇸🇬", url:"https://flagcdn.com/w320/sg.png"},
+            {code:"SK", lat:48.669026, lon:19.699024, name:"Slovakia", emoji:"🇸🇰", url:"https://flagcdn.com/w320/sk.png"},
+            {code:"SI", lat:46.151241, lon:14.995463, name:"Slovenia", emoji:"🇸🇮", url:"https://flagcdn.com/w320/si.png"},
+            {code:"SB", lat:-9.64571, lon:160.156194, name:"Solomon Islands", emoji:"🇸🇧", url:"https://flagcdn.com/w320/sb.png"},
+            {code:"SO", lat:5.152149, lon:46.199616, name:"Somalia", emoji:"🇸🇴", url:"https://flagcdn.com/w320/so.png"},
+            {code:"ZA", lat:-30.559482, lon:22.937506, name:"South Africa", emoji:"🇿🇦", url:"https://flagcdn.com/w320/za.png"},
+            {code:"KR", lat:35.907757, lon:127.766922, name:"South Korea", emoji:"🇰🇷", url:"https://flagcdn.com/w320/kr.png"},
+            {code:"SS", lat:6.877, lon:31.307, name:"South Sudan", emoji:"🇸🇸", url:"https://flagcdn.com/w320/ss.png"},
+            {code:"ES", lat:40.463667, lon:-3.74922, name:"Spain", emoji:"🇪🇸", url:"https://flagcdn.com/w320/es.png"},
+            {code:"LK", lat:7.873054, lon:80.771797, name:"Sri Lanka", emoji:"🇱🇰", url:"https://flagcdn.com/w320/lk.png"},
+            {code:"SD", lat:12.862807, lon:30.217636, name:"Sudan", emoji:"🇸🇩", url:"https://flagcdn.com/w320/sd.png"},
+            {code:"SR", lat:3.919305, lon:-56.027783, name:"Suriname", emoji:"🇸🇷", url:"https://flagcdn.com/w320/sr.png"},
+            {code:"SE", lat:60.128161, lon:18.643501, name:"Sweden", emoji:"🇸🇪", url:"https://flagcdn.com/w320/se.png"},
+            {code:"CH", lat:46.818188, lon:8.227512, name:"Switzerland", emoji:"🇨🇭", url:"https://flagcdn.com/w320/ch.png"},
+            {code:"SY", lat:34.802075, lon:38.996815, name:"Syria", emoji:"🇸🇾", url:"https://flagcdn.com/w320/sy.png"},
+            {code:"TJ", lat:38.861034, lon:71.276093, name:"Tajikistan", emoji:"🇹🇯", url:"https://flagcdn.com/w320/tj.png"},
+            {code:"TZ", lat:-6.369028, lon:34.888822, name:"Tanzania", emoji:"🇹🇿", url:"https://flagcdn.com/w320/tz.png"},
+            {code:"TH", lat:15.870032, lon:100.992541, name:"Thailand", emoji:"🇹🇭", url:"https://flagcdn.com/w320/th.png"},
+            {code:"TL", lat:-8.874217, lon:125.727539, name:"Timor-Leste", emoji:"🇹🇱", url:"https://flagcdn.com/w320/tl.png"},
+            {code:"TG", lat:8.619543, lon:0.824782, name:"Togo", emoji:"🇹🇬", url:"https://flagcdn.com/w320/tg.png"},
+            {code:"TO", lat:-21.178986, lon:-175.198242, name:"Tonga", emoji:"🇹🇴", url:"https://flagcdn.com/w320/to.png"},
+            {code:"TT", lat:10.691803, lon:-61.222503, name:"Trinidad and Tobago", emoji:"🇹🇹", url:"https://flagcdn.com/w320/tt.png"},
+            {code:"TN", lat:33.886917, lon:9.537499, name:"Tunisia", emoji:"🇹🇳", url:"https://flagcdn.com/w320/tn.png"},
+            {code:"TM", lat:38.969719, lon:59.556278, name:"Turkmenistan", emoji:"🇹🇲", url:"https://flagcdn.com/w320/tm.png"},
+            {code:"TV", lat:-7.109535, lon:177.64933, name:"Tuvalu", emoji:"🇹🇻", url:"https://flagcdn.com/w320/tv.png"},
+            {code:"TR", lat:38.963745, lon:35.243322, name:"Türkiye", emoji:"🇹🇷", url:"https://flagcdn.com/w320/tr.png"},
+            {code:"UG", lat:1.373333, lon:32.290275, name:"Uganda", emoji:"🇺🇬", url:"https://flagcdn.com/w320/ug.png"},
+            {code:"UA", lat:48.379433, lon:31.16558, name:"Ukraine", emoji:"🇺🇦", url:"https://flagcdn.com/w320/ua.png"},
+            {code:"AE", lat:23.424076, lon:53.847818, name:"United Arab Emirates", emoji:"🇦🇪", url:"https://flagcdn.com/w320/ae.png"},
+            {code:"GB", lat:55.378051, lon:-3.435973, name:"United Kingdom", emoji:"🇬🇧", url:"https://flagcdn.com/w320/gb.png"},
+            {code:"US", lat:37.09024, lon:-95.712891, name:"United States", emoji:"🇺🇸", url:"https://flagcdn.com/w320/us.png"},
+            {code:"UY", lat:-32.522779, lon:-55.765835, name:"Uruguay", emoji:"🇺🇾", url:"https://flagcdn.com/w320/uy.png"},
+            {code:"UZ", lat:41.377491, lon:64.585262, name:"Uzbekistan", emoji:"🇺🇿", url:"https://flagcdn.com/w320/uz.png"},
+            {code:"VU", lat:-15.376706, lon:166.959158, name:"Vanuatu", emoji:"🇻🇺", url:"https://flagcdn.com/w320/vu.png"},
+            {code:"VA", lat:41.902916, lon:12.453389, name:"Vatican City", emoji:"🇻🇦", url:"https://flagcdn.com/w320/va.png"},
+            {code:"VE", lat:6.42375, lon:-66.58973, name:"Venezuela", emoji:"🇻🇪", url:"https://flagcdn.com/w320/ve.png"},
+            {code:"VN", lat:14.058324, lon:108.277199, name:"Vietnam", emoji:"🇻🇳", url:"https://flagcdn.com/w320/vn.png"},
+            {code:"YE", lat:15.552727, lon:48.516388, name:"Yemen", emoji:"🇾🇪", url:"https://flagcdn.com/w320/ye.png"},
+            {code:"ZM", lat:-13.133897, lon:27.849332, name:"Zambia", emoji:"🇿🇲", url:"https://flagcdn.com/w320/zm.png"},
+            {code:"ZW", lat:-19.015438, lon:29.154857, name:"Zimbabwe", emoji:"🇿🇼", url:"https://flagcdn.com/w320/zw.png"}
+        ];
+
+        // Urutkan daftar negara abjad A-Z untuk sidebar
+        countriesData.sort((a, b) => a.name.localeCompare(b.name));
+
+        // 1. Inisialisasi Peta Dunia
+        const map = L.map('map', {
+            center: [15, 10],
+            zoom: 3,
+            minZoom: 2,
+            maxZoom: 10
+        });
+
+        // Pakai OSM Tile (GRATIS & Handal)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // 2. Fungsi Penghasil Warna Unik Berdasarkan String Nama Negara (Pastel dan Berbeda)
+        function getColorFromString(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            // Menggunakan HSL untuk warna pastel yang bervariasi
+            const h = Math.abs(hash) % 360;
+            return `hsl(${h}, 75%, 70%)`; 
+        }
+
+        // 3. AMBIL DATA BATAS WILAYAH DARI CDN JSDELIVR (BEBAS CORS)
+        fetch('https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json')
+            .then(response => {
+                if (!response.ok) throw new Error("Gagal mengambil data dari CDN JSDelivr");
+                return response.json();
+            })
+            .then(geoJsonData => {
+                L.geoJSON(geoJsonData, {
+                    style: function(feature) {
+                        const countryName = feature.properties.name || '';
+                        return {
+                            fillColor: getColorFromString(countryName), // Mengisi warna unik berbeda
+                            fillOpacity: 0.6,
+                            color: '#111111',       // Garis batas tebal berwarna abu-abu gelap/hitam
+                            weight: 2.5,            // Tebal garis batas (thick separation lines)
+                            opacity: 1
+                        };
+                    },
+                    onEachFeature: function(feature, layer) {
+                        layer.on('click', function() {
+                            const countryName = feature.properties.name.toLowerCase();
+                            const found = countriesData.find(c => c.name.toLowerCase() === countryName);
+                            if (found) {
+                                focusOnCountry(found);
+                            }
+                        });
+                    }
+                }).addTo(map);
+            })
+            .catch(error => {
+                console.error('Error saat load GeoJSON:', error);
+            });
+
+        const markersList = {};
+
+        // 4. Tambahkan Marker Bendera (Tanpa BindPopup / Tanpa Kotak Putih)
+        countriesData.forEach(country => {
+            const customIcon = L.divIcon({
+                html: `
+                    <div class="custom-marker" id="marker-${country.code}">
+                        <img src="${country.url}" class="marker-flag" alt="${country.name}">
+                        <div class="marker-label">${country.emoji} ${country.name}</div>
+                    </div>
+                `,
+                className: 'leaflet-dummy-class', 
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+
+            const marker = L.marker([country.lat, country.lon], { icon: customIcon }).addTo(map);
+            markersList[country.name.toLowerCase()] = marker;
+        });
+
+        // 5. Render Daftar Samping di Sidebar (Kiri)
+        const countryListElement = document.getElementById('country-list');
+        
+        function renderSidebarList(data) {
+            countryListElement.innerHTML = '';
+            data.forEach(country => {
+                const li = document.createElement('li');
+                li.className = 'country-item';
+                li.innerHTML = `<img src="${country.url}" alt=""> <span>${country.name}</span>`;
+                
+                li.addEventListener('click', () => {
+                    focusOnCountry(country);
+                });
+                countryListElement.appendChild(li);
+            });
+        }
+
+        renderSidebarList(countriesData);
+
+        // 6. Fungsi Fokus & Terbang Mulus ke Negara yang Dipilih (Tanpa Membuka Kotak Putih Otomatis)
+        function focusOnCountry(country) {
+            map.flyTo([country.lat, country.lon], 5, {
+                animate: true,
+                duration: 1.5
+            });
+        }
+
+        // 7. Pengatur Ukuran Bendera Dinamis Sesuai Jarak Zoom (Sangat Rapi)
+        function updateMarkerStyleByZoom() {
+            const currentZoom = map.getZoom();
+            const flags = document.querySelectorAll('.marker-flag');
+            const labels = document.querySelectorAll('.marker-label');
+
+            let newWidth = 16; 
+            if (currentZoom === 3) newWidth = 18;
+            else if (currentZoom === 4) newWidth = 24;
+            else if (currentZoom === 5) newWidth = 32;
+            else if (currentZoom >= 6) newWidth = 45;
+
+            flags.forEach(flag => {
+                flag.style.width = newWidth + 'px';
+            });
+
+            labels.forEach(label => {
+                if (currentZoom >= 5) {
+                    label.style.display = 'block';
+                } else {
+                    label.style.display = 'none';
+                }
+            });
+        }
+
+        map.on('zoomend', updateMarkerStyleByZoom);
+        map.on('moveend', updateMarkerStyleByZoom);
+        
+        setTimeout(updateMarkerStyleByZoom, 500);
+
+        // 8. Filter Input Pencarian
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', () => {
+            const val = searchInput.value.toLowerCase().trim();
+            const filtered = countriesData.filter(c => c.name.toLowerCase().includes(val));
+            renderSidebarList(filtered);
+        });
+    </script>
+</body>
+</html>
